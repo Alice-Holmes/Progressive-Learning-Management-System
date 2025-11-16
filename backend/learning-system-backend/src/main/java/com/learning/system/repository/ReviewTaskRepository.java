@@ -10,7 +10,11 @@ import java.util.List;
 
 @Repository
 public interface ReviewTaskRepository extends JpaRepository<ReviewTask, Long> {
+    // 按日期和状态查询任务
     List<ReviewTask> findByReviewDateAndStatus(LocalDate reviewDate, ReviewTask.TaskStatus status);
+
+    // 按状态查询所有任务
+    List<ReviewTask> findByStatus(ReviewTask.TaskStatus status);
 
     @Query("SELECT rt FROM ReviewTask rt WHERE rt.reviewDate = :reviewDate")
     List<ReviewTask> findByReviewDate(LocalDate reviewDate);

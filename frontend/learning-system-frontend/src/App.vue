@@ -5,10 +5,10 @@
       <el-header class="app-header">
         <div class="header-content">
           <h1 class="app-title">
-            <el-icon style="vertical-align: middle; margin-right: 10px; color: #409EFF;">
-              <Reading />
+            <el-icon style="vertical-align: middle; margin-right: 2px; color: white">
+              <List />
             </el-icon>
-            渐进式学习管理系统
+            Aliceの学习管理系统
           </h1>
           <div class="header-actions">
             <el-tag type="info" size="large">
@@ -27,8 +27,20 @@
           </div>
 
           <!-- 右侧任务区域 -->
-          <div class="right-panel">
+          <!-- <div class="right-panel">
             <DailyTasks ref="dailyTasksRef" />
+          </div> -->
+
+          <!-- 右侧面板：今日任务和学习历史 更新，添加学习历史标签页 -->
+          <div class="right-panel">
+            <el-tabs type="border-card" v-model="activeTab" @tab-change="handleTabChange">
+              <el-tab-pane label="📋 今日任务" name="tasks">
+                <DailyTasks ref="dailyTasksRef" />
+              </el-tab-pane>
+              <el-tab-pane label="📖 学习历史" name="history">
+                <StudyHistory ref="studyHistoryRef" @content-deleted="handleContentDeleted" />
+              </el-tab-pane>
+            </el-tabs>
           </div>
         </div>
       </el-main>
@@ -39,12 +51,15 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Reading } from '@element-plus/icons-vue'
+import { List } from '@element-plus/icons-vue'
 import StudyInput from '@/components/StudyInput.vue'
 import DailyTasks from '@/components/DailyTasks.vue'
+import StudyHistory from '@/components/StudyHistory.vue'
 
 const currentDate = ref('')
 const dailyTasksRef = ref(null)
+const activeTab = ref('tasks')
+const studyHistoryRef = ref(null)
 
 // 更新当前日期
 const updateCurrentDate = () => {
@@ -53,7 +68,7 @@ const updateCurrentDate = () => {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
-    weekday: 'long'
+    weekday: 'long',
   })
 }
 
@@ -65,6 +80,22 @@ const handleContentAdded = () => {
   }
 }
 
+// 处理标签页切换事件
+const handleTabChange = (tabName) => {
+  if (tabName === 'history' && studyHistoryRef.value) {
+    studyHistoryRef.value.refresh()
+  }
+}
+
+// 处理学习记录删除事件
+const handleContentDeleted = () => {
+  // 如果每日任务组件存在，刷新任务列表
+  if (dailyTasksRef.value && dailyTasksRef.value.refreshTasks) {
+    dailyTasksRef.value.refreshTasks()
+  }
+}
+
+// 初始化时更新当前日期
 onMounted(() => {
   updateCurrentDate()
 })
@@ -78,7 +109,9 @@ onMounted(() => {
 }
 
 #app {
-  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
+  font-family:
+    'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial,
+    sans-serif;
   height: 100vh;
 }
 
@@ -87,7 +120,7 @@ onMounted(() => {
 }
 
 .app-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #aa87fb 0%, #cbf9c4 100%);
   color: white;
   display: flex;
   align-items: center;
@@ -131,7 +164,8 @@ onMounted(() => {
   height: 100%;
 }
 
-.left-panel, .right-panel {
+.left-panel,
+.right-panel {
   min-height: 600px;
 }
 

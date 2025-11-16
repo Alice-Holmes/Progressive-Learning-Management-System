@@ -1,132 +1,119 @@
 <template>
   <div class="daily-tasks">
-    <el-card :header="`📋 今日复习任务 (${tasks.length}个)`" shadow="hover">
-      <div v-if="tasks.length === 0" class="empty-state">
+    <el-card shadow="hover">
+      <template #header>
+        <div class="task-header">
+          <span class="header-title">📋 今日复习任务</span>
+          <div class="header-stats">
+            <el-tag type="success" size="small"> 已完成: {{ completedTasksCount }} </el-tag>
+            <el-tag type="warning" size="small"> 待完成: {{ pendingTasksCount }} </el-tag>
+            <el-button
+              v-if="completedTasksCount > 0"
+              size="small"
+              link
+              @click="showCompleted = !showCompleted"
+            >
+              {{ showCompleted ? '隐藏已完成' : '查看已完成' }}
+            </el-button>
+          </div>
+        </div>
+      </template>
+
+      <!-- 空状态 -->
+      <div v-if="pendingTasks.length === 0 && completedTasks.length === 0" class="empty-state">
         <el-empty description="今天没有复习任务，休息一下或学习新内容吧！" />
       </div>
 
-      <el-timeline v-else>
-        <el-timeline-item
-          v-for="task in tasks"
-          :key="task.id"
-          :timestamp="`第 ${task.reviewStage} 次复习`"
-          :type="getTimelineType(task.status)"
-          :icon="getTaskIcon(task.status)"
-          size="large"
-        >
-          <el-card shadow="never" :class="['task-card', task.status === 'COMPLETED' ? 'completed' : '']">
-            <div class="task-content">
-              <h4 class="task-title">{{ task.studyContent.title }}</h4>
-              <p class="task-desc">{{ task.studyContent.content }}</p>
+      <!-- 全部完成状态 -->
+      <div v-else-if="pendingTasks.length === 0 && completedTasks.length > 0" class="all-completed">
+        <el-result icon="success" title="恭喜！" sub-title="今日复习任务已全部完成！">
+          <template #extra>
+            <el-button type="primary" @click="showCompleted = true"> 查看完成记录 </el-button>
+          </template>
+        </el-result>
+      </div>
 
-              <div class="task-meta">
-                <el-tag
-                  :type="getCategoryType(task.studyContent.category)"
-                  size="small"
-                  class="category-tag"
-                >
-                  {{ getCategoryName(task.studyContent.category) }}
-                </el-tag>
-                <el-tag size="small" type="info" class="difficulty-tag">
-                  难度: {{ '⭐'.repeat(task.studyContent.difficultyLevel) }}
-                </el-tag>
-                <span class="study-date">
-                  学习日期: {{ formatDate(task.studyContent.studyDate) }}
-                </span>
-              </div>
+      <!-- 待完成任务 -->
+      <div v-if="pendingTasks.length > 0">
+        <div class="section-title">待完成 ({{ pendingTasks.length }})</div>
+        <el-timeline>
+          <el-timeline-item
+            v-for="task in pendingTasks"
+            :key="task.id"
+            :timestamp="`第 ${task.reviewStage} 次复习`"
+            type="primary"
+            icon="Clock"
+            size="large"
+          >
+            <task-card :task="task" @task-completed="handleTaskCompleted" />
+          </el-timeline-item>
+        </el-timeline>
+      </div>
 
-              <div class="task-actions">
-                <el-button
-                  v-if="task.status === 'PENDING'"
-                  type="success"
-                  size="small"
-                  @click="completeTask(task.id)"
-                  :loading="completingTaskId === task.id"
-                >
-                  <el-icon style="vertical-align: middle; margin-right: 5px;">
-                    <Check />
-                  </el-icon>
-                  标记完成
-                </el-button>
-                <el-tag v-else type="success" class="completed-tag">
-                  <el-icon style="vertical-align: middle; margin-right: 5px;">
-                    <SuccessFilled />
-                  </el-icon>
-                  已完成
-                </el-tag>
-              </div>
-            </div>
-          </el-card>
-        </el-timeline-item>
-      </el-timeline>
+      <!-- 已完成任务（可折叠） -->
+      <div v-if="completedTasks.length > 0 && showCompleted">
+        <div class="section-title">已完成 ({{ completedTasks.length }})</div>
+        <el-timeline>
+          <el-timeline-item
+            v-for="task in completedTasks"
+            :key="task.id"
+            :timestamp="`第 ${task.reviewStage} 次复习 - ${formatTime(task.completedTime)}`"
+            type="success"
+            icon="SuccessFilled"
+            size="large"
+          >
+            <task-card :task="task" :readonly="true" />
+          </el-timeline-item>
+        </el-timeline>
+      </div>
     </el-card>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, defineExpose } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Check, SuccessFilled } from '@element-plus/icons-vue'
+import TaskCard from './TaskCard.vue'
 import { studyApi } from '@/services/api'
 
-const tasks = ref([])
-const completingTaskId = ref(null)
+const pendingTasks = ref([])
+const completedTasks = ref([])
+const showCompleted = ref(false)
 
-// 分类类型映射
-const categoryMap = {
-  programming: { name: '编程开发', type: 'primary' },
-  language: { name: '语言学习', type: 'success' },
-  math: { name: '数学逻辑', type: 'warning' },
-  science: { name: '科学技术', type: 'info' },
-  humanity: { name: '人文历史', type: 'danger' },
-  other: { name: '其他', type: '' }
-}
+// 计算属性
+const pendingTasksCount = computed(() => pendingTasks.value.length)
+const completedTasksCount = computed(() => completedTasks.value.length)
 
-const getCategoryName = (category) => {
-  return categoryMap[category]?.name || category
-}
-
-const getCategoryType = (category) => {
-  return categoryMap[category]?.type || ''
-}
-
-const getTimelineType = (status) => {
-  return status === 'COMPLETED' ? 'success' : 'primary'
-}
-
-const getTaskIcon = (status) => {
-  return status === 'COMPLETED' ? 'SuccessFilled' : 'Clock'
-}
-
-const formatDate = (dateString) => {
-  return new Date(dateString).toLocaleDateString('zh-CN')
+const formatTime = (dateTimeString) => {
+  if (!dateTimeString) return ''
+  return new Date(dateTimeString).toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 const loadTodayTasks = async () => {
   try {
-    const response = await studyApi.getTodayTasks()
-    tasks.value = response.data
+    // 并行加载待完成和已完成任务
+    const [pendingResponse, completedResponse] = await Promise.all([
+      studyApi.getTodayPendingTasks(),
+      studyApi.getTodayCompletedTasks(),
+    ])
+
+    pendingTasks.value = pendingResponse.data
+    completedTasks.value = completedResponse.data
   } catch (error) {
     console.error('加载任务失败:', error)
     ElMessage.error('加载任务失败')
   }
 }
 
-const completeTask = async (taskId) => {
-  completingTaskId.value = taskId
-  try {
-    await studyApi.completeTask(taskId)
-    ElMessage.success({
-      message: '任务完成！继续加油！💪',
-      duration: 2000
-    })
-    await loadTodayTasks() // 重新加载任务列表
-  } catch (error) {
-    console.error('完成任务失败:', error)
-    ElMessage.error('操作失败')
-  } finally {
-    completingTaskId.value = null
-  }
+const handleTaskCompleted = () => {
+  ElMessage.success({
+    message: '任务完成！继续加油！💪',
+    duration: 2000,
+  })
+  loadTodayTasks() // 重新加载任务
 }
 
 onMounted(() => {
@@ -135,7 +122,7 @@ onMounted(() => {
 
 // 暴露刷新方法给父组件
 defineExpose({
-  refreshTasks: loadTodayTasks
+  refreshTasks: loadTodayTasks,
 })
 </script>
 
@@ -144,60 +131,58 @@ defineExpose({
   margin-bottom: 20px;
 }
 
-.task-card {
-  transition: all 0.3s ease;
+.task-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
-.task-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1) !important;
-}
-
-.task-card.completed {
-  opacity: 0.8;
-  background-color: #f8fff9;
-}
-
-.task-title {
-  margin: 0 0 8px 0;
-  color: #303133;
+.header-title {
   font-size: 16px;
+  font-weight: 600;
+  color: #303133;
 }
 
-.task-desc {
-  margin: 0 0 12px 0;
-  color: #606266;
-  line-height: 1.5;
-  font-size: 14px;
-}
-
-.task-meta {
+.header-stats {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-  flex-wrap: wrap;
+  gap: 10px;
 }
 
-.category-tag, .difficulty-tag {
-  font-size: 12px;
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #606266;
+  margin: 20px 0 15px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f0f0f0;
 }
 
-.study-date {
+.empty-state,
+.all-completed {
+  padding: 40px 0;
+}
+
+:deep(.el-timeline) {
+  padding-left: 10px;
+}
+
+:deep(.el-timeline-item__timestamp) {
   font-size: 12px;
   color: #909399;
 }
 
-.task-actions {
-  display: flex;
-  justify-content: flex-end;
-}
+@media (max-width: 768px) {
+  .task-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 
-.completed-tag {
-  font-size: 12px;
-}
-
-.empty-state {
-  padding: 40px 0;
+  .header-stats {
+    width: 100%;
+    justify-content: space-between;
+  }
 }
 </style>
